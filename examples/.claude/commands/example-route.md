@@ -1,6 +1,6 @@
-Auto-route a case to the correct persona based on Record Type.
+Auto-route a Salesforce case to the correct follow-up command by Record Type.
 
-Query the case, determine the correct persona, then execute the appropriate workflow.
+Query the case, determine the correct workflow, then execute it.
 
 ```sql
 SELECT Id, CaseNumber, Subject, Status, Priority, RecordType.Name, Owner.Name, Account.Name
@@ -12,17 +12,21 @@ LIMIT 1
 
 ## Routing Logic
 
-Based on RecordType.Name:
+Based on `RecordType.Name`, run the matching workflow:
 
-- **GSD** → Load persona from `.claude/personas/flo-rivers.md`. Analyze the case for automation opportunities, check for flow errors, and calculate time savings.
-- **Support Request** → Load persona from `.claude/personas/holly-helpdesk.md`. Analyze the case, research documentation, and prepare a response draft.
-- **Client Success** or **New Client** → Load persona from `.claude/personas/stan-dardson.md`. Review case quality and SLA compliance.
-- **Porting** → Load persona from `.claude/personas/stan-dardson.md`. Check SLA compliance and routing accuracy.
-- **Any other** → Load persona from `.claude/personas/stan-dardson.md`. Perform general quality review.
+| Record Type | Follow-up command | Skills to preload |
+|---|---|---|
+| GSD | `/flow-review` (after evaluating automation opportunities) | `flow-review`, `sf-smoke-as` |
+| Support Request | `/holly-analyze` | `voip-research`, `docs-update` |
+| Client Success, New Client | `/stan-review` | (none) |
+| Porting | `/stan-review` (focus on SLA) | (none) |
+| Any other | `/stan-review` | (none) |
+
+Skills should be invoked via the `Skill` tool at the start of the follow-up workflow when applicable.
 
 After routing, present:
 1. Case summary (number, subject, status, owner, account)
-2. Which persona was selected and why
-3. The persona's initial analysis
+2. Which workflow was selected and why
+3. The initial analysis from that workflow
 
-If no case number provided, ask for one.
+If no case number is provided, ask for one.
