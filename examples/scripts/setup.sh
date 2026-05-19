@@ -329,6 +329,16 @@ fi
 # ── Step 1b: Symlink shared skills (per-skill, additive) ────────
 _skills_src="$SCRIPT_DIR/skills"
 _skills_dest="$CLAUDE_DIR/skills"
+# Guard: skip per-skill symlink loop when ~/.claude/skills/ is tracked in a
+# separate user-private repo ([your-github-username]/claude-user via !skills/** allowlist).
+# Symlinking would rm -rf the tracked real-dir copies on the next inner block.
+# Ray's box ships /publish-skills for the sync direction; team boxes (no such
+# repo) skip this guard and run the existing symlink loop unchanged.
+if [[ -d "$CLAUDE_DIR/.git" ]] && ! git -C "$CLAUDE_DIR" check-ignore --quiet skills/ 2>/dev/null; then
+  _remote_url=$(git -C "$CLAUDE_DIR" remote get-url origin 2>/dev/null || echo "user-private repo")
+  step_warn "Skills" "~/.claude/skills/ tracked in ${_remote_url} — skipping symlink loop (use /publish-skills to sync)"
+  _skills_src=""
+fi
 if [[ -d "$_skills_src" ]]; then
   mkdir -p "$_skills_dest"
   _skills_linked=0
