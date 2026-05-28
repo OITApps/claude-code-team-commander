@@ -267,9 +267,9 @@ if [[ -z "$OCC_ROLE" ]]; then
 fi
 echo ""
 
-# ── Step 1: Symlink personas, commands, and standards ────────────
-echo "[1/9] Linking personas, commands, standards, and skills..."
-_step_start "Personas, commands, and standards linked"
+# ── Step 1: Symlink personas, commands, standards, and tests ─────
+echo "[1/9] Linking personas, commands, standards, tests, and skills..."
+_step_start "Personas, commands, standards, and tests linked"
 
 _link_dir() {
   local src="$1" dest="$2" label="$3"
@@ -308,7 +308,7 @@ _link_dir() {
 }
 
 _step1_ok=true
-for _pair in "personas:personas" "commands:commands" "standards:standards"; do
+for _pair in "personas:personas" "commands:commands" "standards:standards" "tests:tests"; do
   _label="${_pair%%:*}"
   _dir="${_pair##*:}"
   _src="$SCRIPT_DIR/.claude/$_dir"
@@ -321,9 +321,9 @@ for _pair in "personas:personas" "commands:commands" "standards:standards"; do
 done
 
 if [[ "$_step1_ok" == true ]]; then
-  step_ok "Personas, commands, and standards linked"
+  step_ok "Personas, commands, standards, and tests linked"
 else
-  step_warn "Personas/commands/standards" "some symlinks may not have been created"
+  step_warn "Personas/commands/standards/tests" "some symlinks may not have been created"
 fi
 
 # ── Step 1b: Symlink shared skills (per-skill, additive) ────────
@@ -769,7 +769,19 @@ if [[ ! -f "$VAULT_CONFIG" ]] && [[ "$OCC_AZ_AVAILABLE" == "true" ]]; then
       echo "  Vault created."
       OCC_VAULT_JUST_CREATED=true
     else
-      echo "  Warning: vault creation failed — check permissions on $OCC_VAULT_RG"
+      echo "  Warning: vault creation failed — you may not have Key Vault Contributor on $OCC_VAULT_RG."
+      echo "  Attempting to request provisioning via the OCC self-service provisioner..."
+      # Source the helper from occ-fetch-secrets.sh (defines _occ_request_vault)
+      _occ_fetch_sh="$SCRIPT_DIR/scripts/occ-fetch-secrets.sh"
+      if [[ -f "$_occ_fetch_sh" ]]; then
+        # shellcheck source=scripts/occ-fetch-secrets.sh
+        . "$_occ_fetch_sh" 2>/dev/null || true
+      fi
+      if command -v _occ_request_vault >/dev/null 2>&1; then
+        _occ_request_vault "$_vault_name" || true
+      else
+        echo "  Could not load _occ_request_vault helper — email Ray to provision $_vault_name."
+      fi
     fi
   else
     echo "  Vault $_vault_name already exists (resource group: $_existing_rg)."
