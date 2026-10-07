@@ -24,32 +24,28 @@
 
 ## Git Workflow & Versioning
 
-All changes flow through a two-stage branch model:
+All changes flow through short-lived feature branches off `main`:
 
 ```text
-feature/xyz  →  PR  →  develop  →  PR  →  main
-                       (testing)        (production)
+feature/xyz  →  PR  →  main
 ```
 
 - **`main`** — production-ready. Always stable. Never commit directly.
-- **`develop`** — integration/testing branch. Feature branches merge here first.
-- **Feature branches** — created from `develop`, named `feat/`, `fix/`, `chore/`, `perf/`, etc.
+- **Feature branches** — created from `main`, named `feat/`, `fix/`, `chore/`, `perf/`, etc.
 
 ### Rules
 
-1. Never commit directly to `main` or `develop`
-2. All work starts as a feature branch off `develop`
-3. Feature branches → PR → `develop` (for testing/integration)
-4. `develop` → PR → `main` (for production release, after verification). Before opening, offer to run `/changelog-polish` to rewrite raw entries in Ray's voice.
-5. Branch naming: `{type}/{short-description}` (e.g., `feat/tool-selection`, `fix/bash3-compat`)
-6. Delete feature branches after merge
-7. Keep `develop` in sync with `main` after each release merge
-8. Commit signing is required on `main` and `develop` — contributors must set up SSH/GPG signing before their first PR (see `SECURITY.md`)
-9. If modifying `scripts/setup.sh`, run `bash scripts/compat-check.sh` before opening a PR
+1. Never commit directly to `main`
+2. All work starts as a feature branch off `main`
+3. Feature branches → PR → `main`. Before opening a release-bearing PR, offer to run `/changelog-polish` to rewrite raw entries in Ray's voice.
+4. Branch naming: `{type}/{short-description}` (e.g., `feat/tool-selection`, `fix/bash3-compat`)
+5. Delete feature branches after merge
+6. Commit signing is required on `main` — contributors must set up SSH/GPG signing before their first PR (see `SECURITY.md`)
+7. If modifying `scripts/setup.sh`, run `bash scripts/compat-check.sh` before opening a PR
 
 ### Versioning
 
-- Every PR to `develop` or `main` MUST have exactly one semver label: `patch`, `minor`, or `major`.
+- Every PR to `main` MUST have exactly one semver label: `patch`, `minor`, or `major`.
   - **patch**: bug fixes, minor tweaks, docs updates
   - **minor**: new features, enhancements, new commands/personas
   - **major**: breaking changes (config format changes, removed features)

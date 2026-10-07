@@ -1,34 +1,11 @@
 #!/usr/bin/env bash
 # setup.sh — First-time Claude Code setup for [Your Company] team members
-# Usage: ./scripts/setup.sh [--dev]
+# Usage: ./scripts/setup.sh
 #
 # Reads catalog.json for available plugins and MCP servers.
 # Writes .env and settings.json to ~/.claude/; registers MCP servers via claude mcp add.
-#
-# Flags:
-#   --dev   Use the develop branch instead of main
 
 set -euo pipefail
-
-# Parse flags
-OCC_BRANCH="main"
-for arg in "$@"; do
-  case "$arg" in
-    --dev) OCC_BRANCH="develop" ;;
-  esac
-done
-
-# Switch branch if needed
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ "$OCC_BRANCH" != "main" ]] && [[ -d "$SCRIPT_DIR/.git" ]]; then
-  current=$(git -C "$SCRIPT_DIR" branch --show-current 2>/dev/null || true)
-  if [[ "$current" != "$OCC_BRANCH" ]]; then
-    echo "  Switching to $OCC_BRANCH branch..."
-    git -C "$SCRIPT_DIR" fetch origin "$OCC_BRANCH" 2>/dev/null
-    git -C "$SCRIPT_DIR" checkout "$OCC_BRANCH" 2>/dev/null || git -C "$SCRIPT_DIR" checkout -b "$OCC_BRANCH" "origin/$OCC_BRANCH"
-    git -C "$SCRIPT_DIR" pull 2>/dev/null
-  fi
-fi
 
 # ── Colors ───────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -364,6 +341,39 @@ if [[ -d "$_skills_src" ]]; then
 else
   step_warn "Skills" "no shared skills directory found"
 fi
+
+# ── Step 1c: Symlink shared subagents (per-file, additive) ─────
+# Shared skills/commands dispatch these agents, so they ship together.
+# Same guard as skills: on Ray's box ~/.claude/agents/ is tracked in
+# [your-github-username]/claude-user and /publish-skills handles the sync direction.
+_agents_src="$SCRIPT_DIR/agents"
+_agents_dest="$CLAUDE_DIR/agents"
+if [[ -d "$CLAUDE_DIR/.git" ]] && ! git -C "$CLAUDE_DIR" check-ignore --quiet agents/ 2>/dev/null; then
+  step_warn "Agents" "~/.claude/agents/ tracked in a user-private repo — skipping symlink loop (use /publish-skills to sync)"
+  _agents_src=""
+fi
+if [[ -d "$_agents_src" ]]; then
+  mkdir -p "$_agents_dest"
+  _agents_linked=0
+  for _agent_file in "$_agents_src"/*.md; do
+    [[ -f "$_agent_file" ]] || continue
+    _agent_target="$_agents_dest/$(basename "$_agent_file")"
+    if [[ -L "$_agent_target" ]]; then
+      rm -f "$_agent_target"
+    elif [[ -e "$_agent_target" ]]; then
+      step_warn "Agents" "$(basename "$_agent_file") exists as a local file — left untouched"
+      continue
+    fi
+    ln -s "$_agent_file" "$_agent_target"
+    _agents_linked=$(( _agents_linked + 1 ))
+  done
+  step_ok "Agents linked ($_agents_linked shared subagents)"
+fi
+
+# ── Step 1d: Prune dangling links left by renamed/deleted items ─
+# The loops above only visit names that still exist, so a rename with no alias
+# (e.g. stan-review → sf-case-analyst) leaves the old link pointing at nothing.
+step_ok "$(bash "$SCRIPT_DIR/scripts/prune-dangling-links.sh" "$SCRIPT_DIR" "$CLAUDE_DIR")"
 
 # ── Step 2: Select MCP servers ──────────────────────────────────
 echo ""
@@ -1537,7 +1547,9 @@ else
   step_warn "Hooks" "session hook source not found at $HOOK_SRC"
 fi
 
-# 7b: Deploy all hooks listed in assets-manifest.json
+# 7b: Deploy the hooks listed in hooks/assets-manifest.json. The manifest now only
+# lists hooks (file + settings.json event); step 7c registers them. The old
+# session-start persona/command sync that also read it is retired.
 MANIFEST="$SCRIPT_DIR/hooks/assets-manifest.json"
 if [[ -f "$MANIFEST" ]]; then
   _manifest_hooks=$(python3 -c "
@@ -1561,6 +1573,17 @@ for h in m.get('hooks', []):
       echo "  WARN: $_hfile listed in manifest but not found at $_hsrc"
     fi
   done <<< "$_manifest_hooks"
+fi
+
+# 7b-lib: Deploy shared hook libs (868jv94zd fix #1). plan_files.sh / cross_repo_files.py
+# live under .claude/hooks/lib/ but were never copied to ~/.claude/hooks/lib/, so /done's
+# granularity gate silently no-op'd on a missing source. Deploy recursively, +x on .sh.
+_LIB_SRC="$SCRIPT_DIR/.claude/hooks/lib"
+if [[ -d "$_LIB_SRC" ]]; then
+  mkdir -p "$CLAUDE_DIR/hooks/lib"
+  cp -f "$_LIB_SRC"/* "$CLAUDE_DIR/hooks/lib/" 2>/dev/null || true
+  chmod +x "$CLAUDE_DIR"/hooks/lib/*.sh 2>/dev/null || true
+  echo "  Deployed hooks/lib/ ($(ls -1 "$_LIB_SRC" 2>/dev/null | wc -l | tr -d ' ') file(s))"
 fi
 
 # 7c: Register hooks in settings.json (idempotent)
@@ -1612,9 +1635,11 @@ if os.path.exists(manifest_file):
         if isinstance(entry, dict):
             hfile = entry["file"]
             hevent = entry.get("event", "")
+            hmatcher = entry.get("matcher", "")
         else:
             hfile = entry
             hevent = ""
+            hmatcher = ""
 
         if not hevent:
             continue
@@ -1629,7 +1654,7 @@ if os.path.exists(manifest_file):
             for e in event_hooks for h in e.get("hooks", [])
         )
         if not already:
-            event_hooks.append({"matcher": "", "hooks": [{"type": "command", "command": hook_path}]})
+            event_hooks.append({"matcher": hmatcher, "hooks": [{"type": "command", "command": hook_path}]})
             print(f"  Registered {hfile} → {hevent}")
         else:
             print(f"  {hfile} already registered.")

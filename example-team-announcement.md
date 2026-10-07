@@ -66,11 +66,11 @@ The script installs personas, commands, plugins, and walks you through API keys.
 
 | What you want to do | What to type |
 |---------------------|-------------|
-| Review a case against SOPs | `/stan-review 222448` |
-| Auto-fix case standardization | `/stan-fix 222448` |
-| Debug a Salesforce flow | `/flow-review Lead_Assignment` |
-| Analyze a support ticket | `/holly-analyze 334501` |
-| Draft a client response | `/holly-draft-response 334501` |
+| Review a case against SOPs | `/sf-case-analyst review 222448` |
+| Auto-fix case standardization | `/sf-case-fix 222448` |
+| Debug a Salesforce flow | `/sf-automation-auditor flow Lead_Assignment` |
+| Analyze a support ticket | `/sf-case-analyst analyze 334501` |
+| Draft a client response | `/sf-case-reply 334501` |
 | Create or update a KB article | `/docs-update VoIP Failover` |
 | Query Salesforce | "Show me all open GSD cases for RevOps" |
 | Search VoIP docs | "How do we configure call recording?" |
