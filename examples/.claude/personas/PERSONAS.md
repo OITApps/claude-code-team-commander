@@ -12,10 +12,10 @@ Personas are behavior profiles for AI personalities. Only Jarvis remains active 
 
 The following Claude Code personas were retired in favor of skill-based dispatch:
 
-- **[Persona 1 - e.g. "Flo Rivers"]** — replaced by `flow-review`, `sf-smoke-as`, and other Salesforce skills
+- **[Persona 1 - e.g. "Flo Rivers"]** — replaced by `/sf-automation-auditor` (flow and issue modes), `sf-smoke-as`, and other Salesforce skills
 - **[Persona 5 - e.g. "Holly Helpdesk"]** — Support Request workflow folded into commands that load `runbooks/salesforce-cli.md`
 - **[Persona 3 - e.g. "Paige Turner"]** — replaced by `docs-update`, `voip-research` skills
-- **[Persona 2 - e.g. "Stan Dardson"]** — case review workflow stays in `/stan-review`, `/stan-patrol`, etc. (commands keep the voice; persona file removed)
+- **[Persona 2 - e.g. "Stan Dardson"]** — case review now runs through `/sf-case-analyst review` / `patrol` (the `sf-case-analyst` agent, neutral voice; `review` and `patrol` are modes of that command, and the old `/stan-*` names have no aliases; persona file removed)
 - **[Persona 4 - e.g. "Stella Fullstack"]** — replaced by language/runtime skills (`wordpress-pro`, generic dev with on-demand MCP loads)
 
 Their n8n consolidation into Cloudie happened 2026-04-28; the Claude Code surface follows here.
