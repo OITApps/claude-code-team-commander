@@ -765,8 +765,16 @@ if [[ ! -f "$VAULT_CONFIG" ]] && [[ "$OCC_AZ_AVAILABLE" == "true" ]]; then
   _vault_name="occ-secrets-${_az_short}"
   OCC_VAULT_RG="${OCC_VAULT_RG:-occ-vaults-rg}"
 
-  _existing_rg=$(az keyvault show --name "$_vault_name" --query resourceGroup -o tsv 2>/dev/null) || true
-  if [[ -z "$_existing_rg" ]]; then
+  # Probe vault reachability using data plane (subscription-independent).
+  # az keyvault show is control-plane and subscription-scoped; it reports "not found"
+  # for a vault in a different subscription. Listing secrets goes to vault DNS and
+  # works regardless of the active subscription.
+  _vault_reachable=false
+  if az keyvault secret list --vault-name "$_vault_name" --maxresults 1 --query '[].id' -o none 2>/dev/null; then
+    _vault_reachable=true
+  fi
+
+  if [[ "$_vault_reachable" == "false" ]]; then
     echo "  Creating vault $_vault_name in $OCC_VAULT_RG..."
     _creator_oid=$(az ad signed-in-user show --query id -o tsv 2>/dev/null) || true
     if az keyvault create \
@@ -794,10 +802,10 @@ if [[ ! -f "$VAULT_CONFIG" ]] && [[ "$OCC_AZ_AVAILABLE" == "true" ]]; then
       fi
     fi
   else
-    echo "  Vault $_vault_name already exists (resource group: $_existing_rg)."
+    echo "  Vault $_vault_name already exists and is reachable."
   fi
 
-  if [[ "$OCC_VAULT_JUST_CREATED" == "true" ]] || [[ -n "$_existing_rg" ]]; then
+  if [[ "$OCC_VAULT_JUST_CREATED" == "true" ]] || [[ "$_vault_reachable" == "true" ]]; then
     python3 -c "
 import json, sys
 cfg = {'userVault': sys.argv[1], 'occRepo': sys.argv[2]}
@@ -829,7 +837,7 @@ if [[ "$OCC_VAULT_JUST_CREATED" == "true" ]]; then
       "$_vault_name" "$_creator_oid")
     _prov_resp=$(curl -sf -X POST "$_prov_url" \
       -H "Content-Type: application/json" \
-      -H "X-OCC-Secret: $_prov_secret" \
+      -H @<(printf '%s\n' "X-OCC-Secret: $_prov_secret") \
       -d "$_body" \
       2>/dev/null) || true
 
@@ -1210,7 +1218,7 @@ CUEOF
     echo "  Got authorization code. Exchanging for access token..."
     _cu_resp=$(curl -s -X POST "https://api.clickup.com/api/v2/oauth/token" \
       -H "Content-Type: application/json" \
-      -d "{\"client_id\":\"${CLICKUP_CLIENT_ID}\",\"client_secret\":\"${CLICKUP_CLIENT_SECRET}\",\"code\":\"${_cu_code}\"}")
+      -d @<(printf '%s' "{\"client_id\":\"${CLICKUP_CLIENT_ID}\",\"client_secret\":\"${CLICKUP_CLIENT_SECRET}\",\"code\":\"${_cu_code}\"}"))
     _cu_token=$(echo "$_cu_resp" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null || true)
 
     if [[ -n "${_cu_token:-}" ]]; then
@@ -1673,6 +1681,27 @@ if [[ $_step7_rc -eq 0 ]]; then
   step_ok "Hooks installed"
 else
   step_fail "Hooks" "could not register hooks in settings.json"
+fi
+
+# 7d: Migrate OCC hook registrations to the dispatchers (868mha4th). Declarative: drops the
+# managed (event, matcher, command) tuples in hooks/registrations.json, appends the target
+# registrations, leaves every other entry in place. Idempotent; backs up settings.json once.
+_REG_SPEC="$SCRIPT_DIR/hooks/registrations.json"
+_REG_MIG="$SCRIPT_DIR/scripts/lib/migrate_hook_registrations.py"
+if [[ -f "$_REG_SPEC" && -f "$_REG_MIG" ]]; then
+  set +e
+  python3 "$_REG_MIG" --settings "$SETTINGS" --spec "$_REG_SPEC"
+  _step7d_rc=$?
+  set -e
+  if [[ $_step7d_rc -eq 0 ]]; then
+    step_ok "Hook registrations migrated"
+  elif [[ $_step7d_rc -eq 3 ]]; then
+    step_warn "Hook registrations" "dispatcher hooks not deployed yet; settings.json left unchanged"
+  else
+    step_fail "Hook registrations" "migration failed; settings.json left unchanged"
+  fi
+else
+  step_warn "Hook registrations" "registrations.json or migrator not found"
 fi
 
 # ── Step 8: Multi-system workflow check ─────────────────────────

@@ -869,7 +869,7 @@ CUEOF
       local _cu_resp
       _cu_resp=$(curl -s -X POST "https://api.clickup.com/api/v2/oauth/token" \
         -H "Content-Type: application/json" \
-        -d "{\"client_id\":\"${CLICKUP_CLIENT_ID}\",\"client_secret\":\"${CLICKUP_CLIENT_SECRET}\",\"code\":\"${_cu_code}\"}")
+        -d @<(printf '%s' "{\"client_id\":\"${CLICKUP_CLIENT_ID}\",\"client_secret\":\"${CLICKUP_CLIENT_SECRET}\",\"code\":\"${_cu_code}\"}"))
       local _cu_token
       _cu_token=$(echo "$_cu_resp" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null || true)
 
